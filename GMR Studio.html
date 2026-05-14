@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>GMR Studio OTT - Next Level</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <div id="suggestions"></div>
+
+  <style>
+    body {
+      margin: 0;
+      background: #0b0b0b;
+      color: white;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 30px;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      font-size: 40px;
+      color: rgb(255, 1, 1);
+      font-weight: bold;
+    }
+
+    .search {
+      padding: 10px;
+      border-radius: 20px;
+      border: none;
+      width: 220px;
+      outline: none;
+    }
+
+    .banner {
+      height: 80vh;
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: flex-end;
+      padding: 40px;
+      position: relative;
+    }
+
+    .banner::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 60%;
+      background: linear-gradient(to top, black, transparent);
+    }
+
+    .banner-content {
+      position: relative;
+      z-index: 2;
+    }
+
+
+    .btn {
+      padding: 10px 20px;
+      background: red;
+      border: none;
+      color: white;
+      cursor: pointer;
+      margin-right: 10px;
+      border-radius: 5px;
+    }
+
+    .row {
+      display: flex;
+      overflow-x: auto;
+      padding: 20px;
+      gap: 15px;
+    }
+
+    .card {
+      min-width: 200px;
+      transition: 0.3s;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .card:hover {
+      transform: scale(1.2);
+      z-index: 5;
+    }
+
+    .card img,
+    .card video {
+      width: 100%;
+      border-radius: 10px;
+    }
+
+    .title {
+      font-size: 14px;
+      margin-top: 5px;
+    }
+
+    .watch-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 50%;
+      padding: 5px 8px;
+    }
+
+    #playerModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 20;
+    }
+
+    #player {
+      width: 90%;
+      margin: 3% 5%;
+    }
+
+    input {
+      padding: 8px;
+      margin: 5px 0;
+      border: none;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="navbar">
+    <div class="logo">🎬 GMR Studio</div>
+    <input class="search" placeholder="Search..." oninput="searchVideos(this.value)">
+    <button class="btn" onclick="showLogin()">Login</button>
+  </div>
+
+  <div class="banner" id="banner">
+    <div class="banner-content">
+      <h1 id="bannerTitle">Loading...</h1>
+      <button class="btn" onclick="play(featured)">▶ Play</button>
+    </div>
+    <h2 style="margin-left:20px">⏯ Continue Watching</h2>
+    <div id="continue" class="row"></div>
+  </div>
+
+  <h2 style="margin-left:20px">🎬 Action</h2>
+  <div id="action" class="row"></div>
+
+  <h2 style="margin-left:20px">🔥 Trending</h2>
+  <div id="trending" class="row"></div>
+
+  <h2 style="margin-left:20px">😂 Comedy</h2>
+  <div id="comedy" class="row"></div>
+
+  <h2 style="margin-left:20px">🎬 All Videos</h2>
+  <div id="all" class="row"></div>
+
+  <!-- UPLOAD BOX -->
+  <div style="margin:20px">
+    <input id="title" placeholder="Video Title">
+    <input id="url" placeholder="Video URL">
+    <input id="thumb" placeholder="Thumbnail URL">
+    <button onclick="uploadVideo()">Upload</button>
+  </div>
+
+  <div id="playerModal">
+    <button onclick="closePlayer()" style="position:absolute;top:20px;right:20px">❌</button>
+    <video id="player" controls autoplay></video>
+  </div>
+
+  <script>
+    const API = "http://localhost:5000/";
+    let allvideos = [];
+    let featured = "";
+
+    async function loadVideos() {
+      const res = await fetch(API + "/videos");
+      const data = await res.json();
+
+      function loadContinueWatching() {
+        const data = allVideos.filter(v => localStorage.getItem(v.url));
+        renderSection("continue", data);
+      }
+      loadContinueWatching();
+
+      allvideos = data;
+      if (data.length > 0) {
+
+        featured = data[0].url;
+        document.getElementById("bannerTitle").innertext = data[0].title;
+        document.getElementById("banner").style.backgroundImage = `url(${data[0].thumbnail || ''})`
+      }
+      render(data);
+    }
+    renderSection("action", data.filter(v => v.category === "action"));
+    renderSection("comedy", data.filter(v => v.category === "comedy"));
+
+    function render(data) {
+      const trending = document.getElementById("trending");
+      const all = document.getElementById("all");
+
+      trending.innerHTML = "";
+      all.innerHTML = "";
+
+      data.forEach((v, i) => {
+        const card = createCard(v);
+        all.appendChild(card);
+
+        if (i % 2 === 0) {
+          trending.appendChild(createCard(v));
+        }
+      });
+    }
+    function renderSection(id, data) {
+      const el = document.getElementById(id);
+      el.innerHTML = "";
+
+      data.forEach(v => {
+        el.appendChild(createCard(v));
+      });
+    }
+
+    function createCard(v) {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      let media;
+
+      if (window.innerWidth < 768) {
+        media = document.createElement("img");
+        media.src = v.thumbnail || "https://via.placeholder.com/300x200";
+      } else {
+        media = document.createElement("video");
+        media.muted = true;
+        media.autoplay = true;
+        media.loop = true;
+        media.playsInline = true;
+
+        if (Hls.isSupported()) {
+          const hls = new Hls();
+          hls.loadSource(v.url);
+          hls.attachMedia(media);
+        }
+      }
+
+      card.appendChild(media);
+
+      card.onclick = () => play(v.url);
+
+      const title = document.createElement("div");
+      title.className = "title";
+      title.innerText = v.title;
+
+      card.appendChild(title);
+
+      return card;
+    }
+
+    function play(url) {
+      const modal = document.getElementById("playerModal");
+      const player = document.getElementById("player");
+
+      modal.style.display = "block";
+
+      const hls = new Hls();
+      hls.loadSource(url);
+      hls.attachMedia(player);
+    }
+
+    function closePlayer() {
+      document.getElementById("playerModal").style.display = "none";
+    }
+
+    function searchVideos(q) {
+      if (!q) return render(allVideos);
+
+      const filtered = allVideos.filter(v =>
+        v.title.toLowerCase().includes(q.toLowerCase())
+      );
+
+      render(filtered); ḍ
+    }
+    async function uploadvideo() {
+      const tiyle = document.getElementById("title").value;
+      const url = document.getElementById("url").value;
+      const thumbnail = document.getElementById("thumb").value;
+
+      await fetch(API + "/videos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, url, thumbnail })
+      });
+      alert("Uploaded 🚀");
+      loadvideos();
+    }
+
+    function loadContinueWatching() {
+      const data = allVideos.filter(v => localStorage.getItem(v.url));
+      renderSection("continue", data);
+    }
+    loadContinueWatching();
+    loadVideos();
+
+    const bcrypt = require("bcrypt");
+
+    app.post("/register", async (req, res) => {
+      const hash = await bcrypt.hash(req.body.password, 10);
+      const user = await User.create({
+        email: req.body.email,
+        password: hash
+      });
+      res.json(user);
+    });
+  </script>
+
+</body>
+
+</html>
